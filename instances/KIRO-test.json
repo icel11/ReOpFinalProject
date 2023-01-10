@@ -1,0 +1,80 @@
+{
+    "parameters": {
+        "size": {
+            "nb_jobs": 2,
+            "nb_tasks": 3,
+            "nb_machines": 2,
+            "nb_operators": 2
+        },
+        "costs": {
+            "unit_penalty": 20,
+            "tardiness": 2
+        }
+    },
+    "jobs": [
+        {
+            "job": 1,
+            "sequence": [
+                1,
+                2
+            ],
+            "release_date": 0,
+            "due_date": 15,
+            "weight": 3
+        },
+        {
+            "job": 2,
+            "sequence": [
+                3
+            ],
+            "release_date": 5,
+            "due_date": 12,
+            "weight": 2
+        }
+    ],
+    "tasks": [
+        {
+            "task": 1,
+            "processing_time": 8,
+            "machines": [
+                {
+                    "machine": 1,
+                    "operators": [
+                        1,
+                        2
+                    ]
+                },
+                {
+                    "machine": 2,
+                    "operators": [
+                        1
+                    ]
+                }
+            ]
+        },
+        {
+            "task": 2,
+            "processing_time": 6,
+            "machines": [
+                {
+                    "machine": 1,
+                    "operators": [
+                        1
+                    ]
+                }
+            ]
+        },
+        {
+            "task": 3,
+            "processing_time": 5,
+            "machines": [
+                {
+                    "machine": 1,
+                    "operators": [
+                        1
+                    ]
+                }
+            ]
+        }
+    ]
+}
