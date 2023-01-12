@@ -5,15 +5,13 @@ import Pkg; Pkg.add("SCIP")
 
 using JuMP, JSON, SCIP #, Gurobi
 
-stringdata = join(readlines("./instances/KIRO-tiny.json"))
+stringdata = join(readlines("./instances/KIRO-small.json"))
 dict = JSON.parse(stringdata)
 
 
 # Preparing an optimization model
 model = Model(SCIP.Optimizer)
-M_1 = 100
-M_2 = -100
-e = 0.01
+M = 100
 nb_jobs = dict["parameters"]["size"]["nb_jobs"]
 nb_tasks = dict["parameters"]["size"]["nb_tasks"]
 nb_machines = dict["parameters"]["size"]["nb_machines"]
@@ -94,10 +92,10 @@ for task_1 in 1:length(dict["tasks"])
         # starts_after/ends_before indicators
         # https://cs.stackexchange.com/questions/69531/greater-than-condition-in-integer-linear-program-with-a-binary-variable
         
-        @constraint(model, b[task_1] + processing_times[task_1] >= b[task_2] + 1 - M_1*(1-starts_after[task_1, task_2]))
-        @constraint(model, b[task_1] + processing_times[task_1] <= b[task_2] + M_1*starts_after[task_1, task_2])
-        @constraint(model, b[task_2] + processing_times[task_2] >= b[task_1] + 1 - M_1*(1-ends_before[task_1, task_2]))
-        @constraint(model, b[task_2] + processing_times[task_2] <= b[task_1] + M_1*ends_before[task_1, task_2])
+        @constraint(model, b[task_1] + processing_times[task_1] >= b[task_2] + 1 - M*(1-starts_after[task_1, task_2]))
+        @constraint(model, b[task_1] + processing_times[task_1] <= b[task_2] + M*starts_after[task_1, task_2])
+        @constraint(model, b[task_2] + processing_times[task_2] >= b[task_1] + 1 - M*(1-ends_before[task_1, task_2]))
+        @constraint(model, b[task_2] + processing_times[task_2] <= b[task_1] + M*ends_before[task_1, task_2])
 
         if task_1 != task_2
             for machine in 1:nb_machines
@@ -112,11 +110,10 @@ for task_1 in 1:length(dict["tasks"])
             end
         end
 
-
         #as = 50
         #cs = 5
-        #@constraint(m, M_2*d_2 + cs*bla + (cs + e)*d_1 <= as) 
-        #@constraint(m, as <= (cs + e)*d_2 + cs*bla + M_1*d_1) 
+        #@constraint(m, M_2*d_2 + cs*bla + (cs + e)*d_1 <= as)
+        #@constraint(m, as <= (cs + e)*d_2 + cs*bla + M_1*d_1)
         #@constraint(m, d_1 + d_2 + bla == 1)
         
         # Big M method to check if they use the same machine/operator
@@ -136,7 +133,7 @@ for task_1 in 1:length(dict["tasks"])
         #@constraint(m, o_o[task_1, task_2] >= 1 + M * (o[task_1] - o[task_2]))
 
         #@constraint(m, o_m[task_1, task_2] => { machine[task_1] - machine[task_2] == 0 })
-        #@constraint(m, o_o[task_1, task_2] => { o[task_1] - o[task_2] == 0 })    
+        #@constraint(m, o_o[task_1, task_2] => { o[task_1] - o[task_2] == 0 })
         end
 end
 
@@ -154,8 +151,8 @@ for job in dict["jobs"]
     end_jobs_tasks[job["job"]] = last_task
     # The U delay is 1 if the job finishes after the due date (not sure if it is correct, must redo)
     #@constraint(m, b[last_task] + processing_times[last_task] - d <= M*U[last_task])
-    @constraint(model, b[job["job"]] + processing_times[job["job"]] >= d + 1 - M_1*(1-U[job["job"]]))
-    @constraint(model, b[job["job"]] + processing_times[job["job"]] <= d + M_1*U[job["job"]])
+    @constraint(model, b[job["job"]] + processing_times[job["job"]] >= d + 1 - M*(1-U[job["job"]]))
+    @constraint(model, b[job["job"]] + processing_times[job["job"]] <= d + M*U[job["job"]])
 
     
     #@constraint(model, U[job["job"]] => { b[last_task] + processing_times[last_task] - d >= 1})
@@ -208,7 +205,7 @@ for task in 1:nb_tasks
 end
 
 # Writing it in a json file
-open("KIRO-tiny-sol_23.json", "w") do f
+open("KIRO-small-sol_23.json", "w") do f
     JSON.print(f, results)
 end
 

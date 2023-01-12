@@ -3,7 +3,7 @@ This code is used to parse an KIRO instance and find a solution in an heuristic 
 """
 from solver import Solver
 
-PATH = './instances/KIRO-tiny.json'
+PATH = './instances/KIRO-large.json'
 
 if __name__ == "__main__":
     solver = Solver(PATH)
