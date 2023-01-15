@@ -12,24 +12,40 @@ def get_tasks(instance):
         for task_job_index, task in enumerate(job["sequence"]):
             previous_tasks = job["sequence"][0:task_job_index]
             task_json = instance["tasks"][task-1]
-            machines = task_json["machines"]
             processing_time = task_json["processing_time"]
+            next_tasks = job["sequence"][task_job_index:len(job["sequence"])]
+            next_tasks_time = processing_time
+            for next_task in next_tasks:
+                next_tasks_time += instance["tasks"][next_task-1]["processing_time"]
+            machines = task_json["machines"]
             release_date = job["release_date"]
             due_date = job["due_date"]
-            task = Task(task, processing_time, machines, previous_tasks, release_date, due_date)
+            weight = job["weight"]
+            task = Task(task, processing_time, next_tasks_time, machines, previous_tasks, release_date, due_date, weight)
             tasks.append(task)
     return tasks
 
 def get_machines(instance):
     machines = []
     for i in range(instance["parameters"]["size"]["nb_machines"]):
-        machines.append(Machine(i+1))
+        tasks = 0
+        for task in instance["tasks"]:
+            for machine in task["machines"]:
+                if machine["machine"] == i+1:
+                    tasks += 1
+        machines.append(Machine(i+1, tasks))
     return machines
 
 def get_operators(instance):
     operators = []
     for i in range(instance["parameters"]["size"]["nb_operators"]):
-        operators.append(MachineOperator(i+1))
+        tasks = 0
+        for task in instance["tasks"]:
+            for machine in task["machines"]:
+                for operator in machine["operators"]:
+                    if operator == i+1:
+                        tasks += 1
+        operators.append(MachineOperator(i+1, tasks))
     return operators
 
 def exists_unfinished_task(tasks):
@@ -41,12 +57,12 @@ def exists_unfinished_task(tasks):
 class Solver():
 
     def __init__(self, path):
-        instance = {}
+        self.instance = {}
         with open(path, encoding="UTF-8") as json_file:
-            instance = json.load(json_file)
-        self.tasks = get_tasks(instance)
-        self.machines = get_machines(instance)
-        self.operators = get_operators(instance)
+            self.instance = json.load(json_file)
+        self.tasks = get_tasks(self.instance)
+        self.machines = get_machines(self.instance)
+        self.operators = get_operators(self.instance)
         self.date = 0
 
     def get_finished_tasks(self):
@@ -77,21 +93,36 @@ class Solver():
             self.date += 1
             for task in self.tasks:
                 if not task.finished:
-                    self.machines, self.operators = task.update(self.machines, self.operators)
-
-        print("Exist unfinished tasks?", exists_unfinished_task(self.tasks))
-        
+                    self.machines, self.operators = task.update(self.machines, self.operators)        
         results = []
         for task in self.tasks:
-            print("Task:", task.number+1, "b:", task.start_date, "m:", task.current_machine, "o:", task.current_operator)
+            #print("Task:", task.number+1, "b:", task.start_date, "m:", task.current_machine, "o:", task.current_operator)
             result = {}
             result["task"] = task.number
             result["start"] = task.start_date
             result["operator"] = task.current_operator
             result["machine"] = task.current_machine
             results.append(result)
-        with open("FASTttt-KIRO-large-sol.json", "w", encoding="UTF-8") as outfile:
-            outfile.write(json.dumps(results, indent=4))
+        
+        return results
+
+    def cost(self, results):
+        cost = 0
+        alfa = self.instance["parameters"]["costs"]["unit_penalty"]
+        beta = self.instance["parameters"]["costs"]["tardiness"]
+        for job in self.instance["jobs"]:
+            last_task_index = job["sequence"][-1]
+            last_task = self.instance["tasks"][last_task_index-1]
+            completion_time = 0
+            for result in results:
+                if result["task"] == last_task_index:
+                    completion_time = result["start"] + last_task["processing_time"]
+
+            is_late = completion_time > job["due_date"]
+            tardiness = completion_time - job["due_date"] if is_late else 0
+
+            cost += job["weight"] * (completion_time + alfa * is_late + beta * tardiness)
+        return cost
 
         
 

@@ -1,13 +1,12 @@
-import Pkg; Pkg.add("JuMP")
-import Pkg; Pkg.add("JSON")
-import Pkg; Pkg.add("SCIP")
-#import Pkg; Pkg.add("Gurobi"); Pkg.build("Gurobi")
+import Pkg;
+Pkg.add("JuMP")
+Pkg.add("JSON")
+Pkg.add("SCIP")
 
-using JuMP, JSON, SCIP #, Gurobi
+using JuMP, JSON, SCIP
 
 stringdata = join(readlines("./instances/KIRO-small.json"))
 dict = JSON.parse(stringdata)
-
 
 # Preparing an optimization model
 model = Model(SCIP.Optimizer)
@@ -31,6 +30,7 @@ jobs = 1:length(dict["jobs"])
 @variable(model, starts_after[1:nb_tasks, 1:nb_tasks], Bin)
 # (2) 1 if end_task_i < start_task_j
 @variable(model, ends_before[1:nb_tasks, 1:nb_tasks], Bin)
+#@variable(model, overlap[1:nb_tasks, 1:nb_tasks], Bin)
 # Overlap in time of i and j if starts_after(i, j) and ends_before(j, i)
 # https://eli.thegreenplace.net/2008/08/15/intersection-of-1d-segments
 
@@ -86,7 +86,9 @@ end
 
 # Setting overlapping indicators
 for task_1 in 1:length(dict["tasks"])
-    for task_2 in 1:length(dict["tasks"])
+    for task_2 in max(1, task_1 - 100):task_1
+
+        println("Double task constraint:", task_1, " ", task_2)
 
         # This is how we model indicator functions as A 1 if B>C 0 otherwise to set the 
         # starts_after/ends_before indicators
@@ -96,6 +98,9 @@ for task_1 in 1:length(dict["tasks"])
         @constraint(model, b[task_1] + processing_times[task_1] <= b[task_2] + M*starts_after[task_1, task_2])
         @constraint(model, b[task_2] + processing_times[task_2] >= b[task_1] + 1 - M*(1-ends_before[task_1, task_2]))
         @constraint(model, b[task_2] + processing_times[task_2] <= b[task_1] + M*ends_before[task_1, task_2])
+        #@constraint(model, starts_after[task_1, task_2]*ends_before[task_1, task_2] == overlap[task_1, task_2])
+        #@constraint(model, overlap[task_2, task_1] == overlap[task_1, task_2])
+
 
         if task_1 != task_2
             for machine in 1:nb_machines
@@ -109,37 +114,13 @@ for task_1 in 1:length(dict["tasks"])
                 end
             end
         end
-
-        #as = 50
-        #cs = 5
-        #@constraint(m, M_2*d_2 + cs*bla + (cs + e)*d_1 <= as)
-        #@constraint(m, as <= (cs + e)*d_2 + cs*bla + M_1*d_1)
-        #@constraint(m, d_1 + d_2 + bla == 1)
-        
-        # Big M method to check if they use the same machine/operator
-        # This one -> https://or.stackexchange.com/questions/33/in-an-integer-program-how-i-can-force-a-binary-variable-to-equal-1-if-some-cond
-        #@constraint(m, 1 - M* (machine[task_1] - machine[task_2]) <= o_m[task_1, task_2])
-        #@constraint(m, o_m[task_1, task_2] >= 1 + M * (machine[task_1] - machine[task_2]))
-
-        #@constraint(m, M_2*d_2_m[task_1,task_2] + machine[task_2]*o_m[task_1,task_2] + (machine[task_2] + e)*d_1_m[task_1,task_2] <= machine[task_1]) 
-        #@constraint(m, machine[task_1] <= (machine[task_2] - e)*d_2_m[task_1,task_2] + machine[task_2]*o_m[task_1,task_2] + M_1*d_1_m[task_1,task_2]) 
-        #@constraint(m, d_1_m[task_1,task_2] + d_2_m[task_1,task_2] + o_m[task_1,task_2] == 1)    
-
-        #@constraint(m, M_2*d_2_o[task_1,task_2] + o[task_2]*o_o[task_1,task_2] + (o[task_2] + e)*d_1_o[task_1,task_2] <= o[task_1]) 
-        #@constraint(m, o[task_1] <= (o[task_2] - e)*d_2_o[task_1,task_2] + o[task_2]*o_o[task_1,task_2] + M_1*d_1_o[task_1,task_2]) 
-        #@constraint(m, d_1_o[task_1,task_2] + d_2_o[task_1,task_2] + o_o[task_1,task_2] == 1)    
-
-        #@constraint(m, 1 - M* (o[task_1] - o[task_2]) <= o_o[task_1, task_2])
-        #@constraint(m, o_o[task_1, task_2] >= 1 + M * (o[task_1] - o[task_2]))
-
-        #@constraint(m, o_m[task_1, task_2] => { machine[task_1] - machine[task_2] == 0 })
-        #@constraint(m, o_o[task_1, task_2] => { o[task_1] - o[task_2] == 0 })
-        end
+    end
 end
 
 # Adding sequencing constraints
 end_jobs_tasks = [0 for n=jobs]
 for job in dict["jobs"]
+    println("Job sequencing constraints:", job["job"])
     # All jobs start after the release_date
     @constraint(model, b[job["sequence"][1]] >= job["release_date"])
     for tf in 2:length(job["sequence"])
@@ -153,12 +134,9 @@ for job in dict["jobs"]
     #@constraint(m, b[last_task] + processing_times[last_task] - d <= M*U[last_task])
     @constraint(model, b[job["job"]] + processing_times[job["job"]] >= d + 1 - M*(1-U[job["job"]]))
     @constraint(model, b[job["job"]] + processing_times[job["job"]] <= d + M*U[job["job"]])
-
-    
-    #@constraint(model, U[job["job"]] => { b[last_task] + processing_times[last_task] - d >= 1})
 end
 
-
+println("Setting objective...")
 # Setting the objective
 alpha = dict["parameters"]["costs"]["unit_penalty"]
 beta = dict["parameters"]["costs"]["tardiness"]
@@ -175,9 +153,11 @@ function W(job)
     return dict["jobs"][job]["weight"]
 end
 
+println("Objective is being processed")
 @objective(model, Min, sum( W(job)*(C(job) + alpha * U[job] + beta * T(job)) for job = jobs))
 
 #print(model)
+println("objective is ready. Optimizing!")
 # Solving the optimization problem
 JuMP.optimize!(model)
 
